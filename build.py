@@ -57,6 +57,29 @@ def esc(s):
     return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
+# KDP minimum inside margin (gutter) by page count.
+# Source: https://kdp.amazon.com/en_US/help/topic/GVBQ3CMEQW3W2VL6
+GUTTER = [(150, "0.375in"), (300, "0.5in"), (500, "0.625in"), (700, "0.75in"), (828, "0.875in")]
+PRESETS = {"a4": "210x297mm", "a5": "148x210mm", "a6": "105x148mm"}
+
+
+def parse_trim(s):
+    """'6x9', '5.5x8.5in', 'a5' or '148x210mm' -> (width, height) as Typst lengths."""
+    m = re.fullmatch(r"([\d.]+)x([\d.]+)(in|mm|cm|pt)?", PRESETS.get(s.lower(), s.lower()))
+    if not m:
+        sys.exit(f"Bad --trim '{s}'. Use WxH with in or mm, or a4, a5, a6.")
+    w, h, unit = m.groups()
+    return f"{w}{unit or 'in'}", f"{h}{unit or 'in'}"
+
+
+def gutter(pages):
+    """The KDP minimum, but never less than 0.625in, so a small book is not cramped at the spine."""
+    for top, g in GUTTER:
+        if pages <= top:
+            return g if float(g[:-2]) > 0.625 else "0.625in"
+    sys.exit(f"{pages} pages is more than KDP prints (828 pages maximum).")
+
+
 def main():
     a = argparse.ArgumentParser()
     a.add_argument("dir")
@@ -65,6 +88,11 @@ def main():
     a.add_argument("--title", default="Untitled")
     a.add_argument("--author", default="")
     a.add_argument("--out", default="book.pdf")
+    a.add_argument("--trim", default="5.5x8.5", help="trim size: 6x9, 5.5x8.5in, a5, 148x210mm (default 5.5x8.5in)")
+    a.add_argument("--bleed", default="0pt", help="bleed on the top, bottom, and outer edges, e.g. 0.125in")
+    a.add_argument("--font-size", default="11pt")
+    a.add_argument("--print", dest="kdp", action="store_true",
+                   help="set the inside margin from the KDP table for the page count (at least 0.625in)")
     a.add_argument("--preview", metavar="PAGES", help="also render these pages to build/preview/, e.g. 1-6")
     a = a.parse_args()
 
@@ -81,8 +109,10 @@ def main():
     shutil.rmtree(build, ignore_errors=True)
     (build / "chapters").mkdir(parents=True)
     shutil.copy(HERE / "template.typ", build)
+    w, h = parse_trim(a.trim)
+    args = (f'title: "{esc(a.title)}", author: "{esc(a.author)}", width: {w}, height: {h}, '
+            f'bleed: {a.bleed}, size: {a.font_size}')
     lines = ['#import "@preview/cmarker:0.1.6"', '#import "template.typ": book',
-             f'#show: book.with(title: "{esc(a.title)}", author: "{esc(a.author)}")',
              '#let scope = (image: (source, alt: none, ..args) => image(source, alt: alt, ..args))']
     for i, f in enumerate(files, 1):
         name = f"chapters/{i:02}.md"
@@ -90,10 +120,32 @@ def main():
         text = fix_images(clean(f.read_text(encoding="utf-8"), fallback), f.parent, build, i)
         (build / name).write_text(text, encoding="utf-8")
         lines.append(f'#cmarker.render(read("{name}"), scope: scope)')
-    (build / "main.typ").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    def compile_book(extra=""):
+        (build / "main.typ").write_text(
+            "\n".join(lines[:2] + [f"#show: book.with({args}{extra})"] + lines[2:]) + "\n", encoding="utf-8")
+        return subprocess.run(["typst", "compile", "--root", str(build), str(build / "main.typ"), str(out)])
+
+    def page_count():
+        q = subprocess.run(["typst", "query", "--root", str(build), str(build / "main.typ"), "<npages>",
+                            "--field", "value", "--one"], capture_output=True, text=True)
+        return int(q.stdout)
 
     out = root / a.out
-    r = subprocess.run(["typst", "compile", "--root", str(build), str(build / "main.typ"), str(out)])
+    r = compile_book()
+    if r.returncode == 0 and a.kdp:
+        extra, seen = "", None
+        for _ in range(4):  # the gutter can change the page count, so repeat until it is stable
+            g = gutter(page_count())
+            if g == seen:
+                break
+            seen, extra = g, f", inner: {g}"
+            r = compile_book(extra)
+        print(f"KDP inside margin: {seen}")
+    if r.returncode == 0:
+        n = page_count()
+        print(f"{n} pages, trim {w} x {h}, bleed {a.bleed}")
+        if a.kdp and n < 24:
+            print("warning: KDP needs at least 24 pages", file=sys.stderr)
     if r.returncode == 0 and a.preview:
         prev = build / "preview"
         prev.mkdir()
