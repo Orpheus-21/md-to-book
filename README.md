@@ -6,7 +6,7 @@ md-to-book builds a typeset book PDF from a folder of Markdown essays.
 
 The script `build.py` reads every `.md` file in a folder. It puts the essays in reading order. It writes one Typst document and compiles it to `book.pdf`. The book has a title page, a copyright page, a table of contents, and one chapter for each essay. Each chapter starts on a right-hand page. The book has running heads and page numbers. Blank pages have neither.
 
-The script can also set the page size and the bleed, and it can check a print book against the KDP paperback rules. The work is in progress. The planned part is a Claude Code skill file.
+The script can also set the page size and the bleed, and it can check a print book against the KDP paperback rules. The folder is also a Claude Code skill. The file `SKILL.md` tells Claude how to ask the questions, build the book, look at the pages, and fix faults.
 
 ## Requirements
 
@@ -22,6 +22,16 @@ The script can also set the page size and the bleed, and it can check a print bo
 ```
 git clone https://github.com/Orpheus-21/md-to-book.git
 ```
+
+## Install as a Claude Code skill
+
+Clone the repository into the skills folder of Claude Code:
+
+```
+git clone https://github.com/Orpheus-21/md-to-book.git ~/.claude/skills/md-to-book
+```
+
+Then ask Claude for a book from a folder of Markdown files. Claude asks about the output and the printer.
 
 ## Usage
 
@@ -80,13 +90,15 @@ The options of `build.py` are:
 * `--trim`: the trim size. Use `6x9`, `5.5x8.5in`, `148x210mm`, `a4`, `a5`, or `a6`. The default is `5.5x8.5`.
 * `--bleed`: extra paper on the top, bottom, and outer edges, for example `0.125in`. The default is `0pt`.
 * `--font-size`: the size of the body text. The default is `11pt`.
+* `--lang`: the language code for hyphenation and quotes, for example `de`. The default is `en`.
+* `--template`: a Typst template file to use in place of `template.typ`.
 * `--print`: set the inside margin from the KDP table for the page count, then run the print check. The inside margin is never less than 0.625 inches.
 
 The margins are arguments of the `book` function in `template.typ`. The default inside margin is 0.875 inches. The default outside margin is 0.625 inches.
 
 ## How it works
 
-The script skips `README.md`, hidden folders, and the `build/` folder. It removes YAML frontmatter from each essay. If an essay has no `#` heading, the script adds one. The title comes from the frontmatter or from the file name.
+The script skips `README.md`, hidden folders, and the `build/` folder. It removes YAML frontmatter from each essay. If an essay does not start with a `#` heading, the script adds one. The title comes from the frontmatter or from the file name.
 
 The script copies the cleaned essays and the local images to `build/` in the essay folder. It writes `build/main.typ` and `build/template.typ`. The `cmarker` package turns each essay into Typst content. The command `typst compile` makes the PDF.
 
@@ -96,7 +108,7 @@ The option `--print` builds the PDF again with the inside margin for the page co
 
 The file `preflight.py` reads the PDF with the poppler tools. It checks the page count (24 to 828 pages), the page size, the embedded fonts, the blank pages, the margins, and the image resolution (300 ppi). The rules come from the KDP help pages for [trim, bleed, and margins](https://kdp.amazon.com/en_US/help/topic/GVBQ3CMEQW3W2VL6) and for [images](https://kdp.amazon.com/en_US/help/topic/G202169030).
 
-The file `questions.md` lists the questions to ask a user before a build. The file `test/test_preflight.py` tests the print check.
+The file `questions.md` lists the questions to ask a user before a build. The file `SKILL.md` holds the steps for Claude. The file `test/test_preflight.py` tests the print check.
 
 ## License
 
