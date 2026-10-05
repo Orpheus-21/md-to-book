@@ -14,10 +14,11 @@
   bottom: 0.875in,
   font: "Libertinus Serif",
   size: 11pt,
+  lang: "en",
   body,
 ) = {
   set document(title: title, author: author)
-  set text(font: font, size: size, lang: "en")
+  set text(font: font, size: size, lang: lang)
   set par(justify: true, leading: 0.65em, first-line-indent: (amount: 1.2em, all: false), spacing: 0.65em)
   set page(
     width: width + bleed, height: height + 2 * bleed,
@@ -85,6 +86,12 @@
   show heading.where(level: 2): set text(size: 1.15em, weight: "bold")
   show heading.where(level: 2): set block(above: 1.4em, below: 0.7em)
   show heading: set par(first-line-indent: 0pt)
+  // Tables: rules above the header, below the header, and below the last row. Bold header.
+  set table(stroke: (_, y) => (top: if y == 0 { 0.8pt } else if y == 1 { 0.4pt } else { 0pt }))
+  show table: set text(size: 0.9em)
+  show table: set par(first-line-indent: 0pt, justify: false)
+  show table: it => block(stroke: (bottom: 0.8pt), it)
+  show table.cell.where(y: 0): strong
   show quote.where(block: true): set pad(x: 1.5em)
   show quote.where(block: true): set par(first-line-indent: 0pt)
 
