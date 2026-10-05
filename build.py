@@ -72,12 +72,19 @@ def parse_trim(s):
     return f"{w}{unit or 'in'}", f"{h}{unit or 'in'}"
 
 
-def gutter(pages):
-    """The KDP minimum, but never less than 0.625in, so a small book is not cramped at the spine."""
+def gutter_min(pages):
+    """The KDP minimum inside margin in inches, or None when the book has too many pages."""
     for top, g in GUTTER:
         if pages <= top:
-            return g if float(g[:-2]) > 0.625 else "0.625in"
-    sys.exit(f"{pages} pages is more than KDP prints (828 pages maximum).")
+            return float(g[:-2])
+
+
+def gutter(pages):
+    """The KDP minimum, but never less than 0.625in, so a small book is not cramped at the spine."""
+    g = gutter_min(pages)
+    if g is None:
+        sys.exit(f"{pages} pages is more than KDP prints (828 pages maximum).")
+    return f"{max(g, 0.625)}in"
 
 
 def main():
@@ -144,8 +151,9 @@ def main():
     if r.returncode == 0:
         n = page_count()
         print(f"{n} pages, trim {w} x {h}, bleed {a.bleed}")
-        if a.kdp and n < 24:
-            print("warning: KDP needs at least 24 pages", file=sys.stderr)
+        if a.kdp:
+            from preflight import check, report
+            report(check(str(out), a.trim, a.bleed))
     if r.returncode == 0 and a.preview:
         prev = build / "preview"
         prev.mkdir()
@@ -155,4 +163,5 @@ def main():
     sys.exit(r.returncode)
 
 
-main()
+if __name__ == "__main__":
+    main()
