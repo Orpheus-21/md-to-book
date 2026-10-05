@@ -7,6 +7,7 @@
 """
 import argparse, re, shutil, subprocess, sys
 from pathlib import Path
+from urllib.parse import unquote
 
 HERE = Path(__file__).resolve().parent
 
@@ -34,6 +35,28 @@ def clean(text, fallback):
     return text
 
 
+IMG = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)([^)]*)\)")
+
+
+def fix_images(text, src_dir, build, n):
+    """Copy local images into the build folder. Replace the rest with the alt text."""
+    def sub(m):
+        alt, path, rest = m.groups()
+        f = src_dir / unquote(path)
+        if re.match(r"\w+://", path) or not f.is_file():
+            print(f"warning: image not used (remote or missing): {path}", file=sys.stderr)
+            return alt
+        dest = Path("assets") / f"{n:02}-{f.name}"
+        (build / dest).parent.mkdir(exist_ok=True)
+        shutil.copy(f, build / dest)
+        return f"![{alt}]({dest}{rest})"
+    return IMG.sub(sub, text)
+
+
+def esc(s):
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def main():
     a = argparse.ArgumentParser()
     a.add_argument("dir")
@@ -42,6 +65,7 @@ def main():
     a.add_argument("--title", default="Untitled")
     a.add_argument("--author", default="")
     a.add_argument("--out", default="book.pdf")
+    a.add_argument("--preview", metavar="PAGES", help="also render these pages to build/preview/, e.g. 1-6")
     a = a.parse_args()
 
     root = Path(a.dir).resolve()
@@ -58,16 +82,24 @@ def main():
     (build / "chapters").mkdir(parents=True)
     shutil.copy(HERE / "template.typ", build)
     lines = ['#import "@preview/cmarker:0.1.6"', '#import "template.typ": book',
-             f'#show: book.with(title: "{a.title}", author: "{a.author}")']
+             f'#show: book.with(title: "{esc(a.title)}", author: "{esc(a.author)}")',
+             '#let scope = (image: (source, alt: none, ..args) => image(source, alt: alt, ..args))']
     for i, f in enumerate(files, 1):
         name = f"chapters/{i:02}.md"
         fallback = re.sub(r"^\d+[-_. ]*", "", f.stem).replace("-", " ").replace("_", " ").title()
-        (build / name).write_text(clean(f.read_text(encoding="utf-8"), fallback), encoding="utf-8")
-        lines.append(f'#cmarker.render(read("{name}"))')
+        text = fix_images(clean(f.read_text(encoding="utf-8"), fallback), f.parent, build, i)
+        (build / name).write_text(text, encoding="utf-8")
+        lines.append(f'#cmarker.render(read("{name}"), scope: scope)')
     (build / "main.typ").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     out = root / a.out
     r = subprocess.run(["typst", "compile", "--root", str(build), str(build / "main.typ"), str(out)])
+    if r.returncode == 0 and a.preview:
+        prev = build / "preview"
+        prev.mkdir()
+        r = subprocess.run(["typst", "compile", "--root", str(build), str(build / "main.typ"),
+                            str(prev / "p{0p}.png"), "--pages", a.preview, "--ppi", "70"])
+        print(f"preview pages in {prev}")
     sys.exit(r.returncode)
 
 
