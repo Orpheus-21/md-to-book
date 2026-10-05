@@ -1,2 +1,3 @@
 build/
 book.pdf
+__pycache__/
