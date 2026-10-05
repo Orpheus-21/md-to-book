@@ -49,35 +49,41 @@
   ]
 
   // Chapters start on a right-hand page. Page numbers start at 1 there.
+  // A chapter-end marker sits at the end of each chapter. A page is blank when
+  // the page before it holds a marker and the page after it opens a chapter.
   pagebreak(weak: true, to: "odd")
   counter(page).update(1)
+  let blank() = {
+    let p = here().page()
+    let after-end = query(<chapter-end>).any(m => m.location().page() == p - 1)
+    let before-chapter = query(heading.where(level: 1)).any(h => h.location().page() == p + 1)
+    after-end and before-chapter
+  }
   set page(
-    numbering: "1",
     header: context {
-      let here = here().page()
-      // No running head on a chapter's first page.
-      if query(heading.where(level: 1)).any(h => h.location().page() == here) { return }
+      let p = here().page()
+      if blank() or query(heading.where(level: 1)).any(h => h.location().page() == p) { return }
       set text(size: 0.85em, style: "italic")
-      if calc.even(here) { author } else {
+      if calc.even(p) { author } else {
         let hs = query(heading.where(level: 1).before(here()))
         if hs.len() > 0 { align(right, hs.last().body) }
       }
     },
+    footer: context if not blank() { align(center, counter(page).display("1")) },
   )
 
   show heading.where(level: 1): it => {
+    [#metadata(none) <chapter-end>]
     pagebreak(weak: true, to: "odd")
-    v(5em)
+    v(4em)
     set par(first-line-indent: 0pt)
-    text(size: 1.8em, weight: "bold", it.body)
-    v(2.5em)
+    it
+    v(1.5em)
   }
-  show heading.where(level: 2): it => {
-    set par(first-line-indent: 0pt)
-    v(1.4em, weak: true)
-    text(size: 1.15em, weight: "bold", it.body)
-    v(0.7em, weak: true)
-  }
+  show heading.where(level: 1): set text(size: 1.8em, weight: "bold")
+  show heading.where(level: 2): set text(size: 1.15em, weight: "bold")
+  show heading.where(level: 2): set block(above: 1.4em, below: 0.7em)
+  show heading: set par(first-line-indent: 0pt)
   show quote.where(block: true): set pad(x: 1.5em)
   show quote.where(block: true): set par(first-line-indent: 0pt)
 
