@@ -7,6 +7,7 @@
   year: datetime.today().year(),
   width: 5.5in,
   height: 8.5in,
+  bleed: 0pt,      // extra paper on the top, bottom, and outer edges
   inner: 0.875in,  // margin at the spine
   outer: 0.625in,
   top: 0.75in,
@@ -19,8 +20,8 @@
   set text(font: font, size: size, lang: "en")
   set par(justify: true, leading: 0.65em, first-line-indent: (amount: 1.2em, all: false), spacing: 0.65em)
   set page(
-    width: width, height: height,
-    margin: (inside: inner, outside: outer, top: top, bottom: bottom),
+    width: width + bleed, height: height + 2 * bleed,
+    margin: (inside: inner, outside: outer + bleed, top: top + bleed, bottom: bottom + bleed),
   )
 
   // Title page: no number, no running head.
@@ -88,4 +89,7 @@
   show quote.where(block: true): set par(first-line-indent: 0pt)
 
   body
+
+  // The query `typst query main.typ "<npages>"` reads the last page number.
+  context [#metadata(here().page()) <npages>]
 }
