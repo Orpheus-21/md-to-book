@@ -29,7 +29,8 @@ def clean(text, fallback):
     meta = m.group(1) if m else ""
     if m:
         text = text[m.end():]
-    if not re.search(r"^# ", text, re.M):
+    lines = text.lstrip().splitlines() + [""]
+    if not (lines[0].startswith("# ") or re.fullmatch(r"=+\s*", lines[1])):
         t = re.search(r"^title:\s*[\"']?(.+?)[\"']?\s*$", meta, re.M)
         text = f"# {t.group(1) if t else fallback}\n\n{text}"
     return text
@@ -98,6 +99,8 @@ def main():
     a.add_argument("--trim", default="5.5x8.5", help="trim size: 6x9, 5.5x8.5in, a5, 148x210mm (default 5.5x8.5in)")
     a.add_argument("--bleed", default="0pt", help="bleed on the top, bottom, and outer edges, e.g. 0.125in")
     a.add_argument("--font-size", default="11pt")
+    a.add_argument("--lang", default="en", help="language code for hyphenation and quotes, e.g. en, de, fr")
+    a.add_argument("--template", default=str(HERE / "template.typ"), help="use this template file instead")
     a.add_argument("--print", dest="kdp", action="store_true",
                    help="set the inside margin from the KDP table for the page count (at least 0.625in)")
     a.add_argument("--preview", metavar="PAGES", help="also render these pages to build/preview/, e.g. 1-6")
@@ -115,10 +118,10 @@ def main():
     build = root / "build"
     shutil.rmtree(build, ignore_errors=True)
     (build / "chapters").mkdir(parents=True)
-    shutil.copy(HERE / "template.typ", build)
+    shutil.copy(a.template, build / "template.typ")
     w, h = parse_trim(a.trim)
     args = (f'title: "{esc(a.title)}", author: "{esc(a.author)}", width: {w}, height: {h}, '
-            f'bleed: {a.bleed}, size: {a.font_size}')
+            f'bleed: {a.bleed}, size: {a.font_size}, lang: "{a.lang}"')
     lines = ['#import "@preview/cmarker:0.1.6"', '#import "template.typ": book',
              '#let scope = (image: (source, alt: none, ..args) => image(source, alt: alt, ..args))']
     for i, f in enumerate(files, 1):
@@ -138,6 +141,7 @@ def main():
         return int(q.stdout)
 
     out = root / a.out
+    out.unlink(missing_ok=True)  # a failed build must not leave an old PDF behind
     r = compile_book()
     if r.returncode == 0 and a.kdp:
         extra, seen = "", None
